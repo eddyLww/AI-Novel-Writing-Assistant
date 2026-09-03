@@ -34,9 +34,36 @@ class ProviderModelRequestLimiter {
     this.requestIntervalMs = normalizeNonNegativeInteger(options.requestIntervalMs);
   }
 
+  private async executeWithRateLimitRetry<T>(operation: () => Promise<T>, retriesLeft = 2): Promise<T> {
+    try {
+      return await operation();
+    } catch (error) {
+      const msg = (error instanceof Error ? error.message : String(error)).toLowerCase();
+      const isRateLimitOrTimeout =
+        msg.includes("429") ||
+        msg.includes("rate_limit") ||
+        msg.includes("too many requests") ||
+        msg.includes("rate limit") ||
+        msg.includes("timed out") ||
+        msg.includes("timeout") ||
+        msg.includes("econnreset") ||
+        msg.includes("etimedout");
+
+      if (isRateLimitOrTimeout && retriesLeft > 0) {
+        const isTimeout = msg.includes("timed out") || msg.includes("timeout") || msg.includes("econnreset") || msg.includes("etimedout");
+        const backoffMs = isTimeout ? 3000 : (8000 + Math.floor(Math.random() * 2000));
+        const reason = isTimeout ? "网络传输超时/连接挂起" : "429 Rate Limit";
+        console.warn(`[requestLimiter] 遇到 ${reason}，将在 ${backoffMs}ms 后自动挂起重试...（剩余重试次数: ${retriesLeft}）`);
+        await new Promise((res) => setTimeout(res, backoffMs));
+        return this.executeWithRateLimitRetry(operation, retriesLeft - 1);
+      }
+      throw error;
+    }
+  }
+
   run<T>(operation: () => Promise<T>): Promise<T> {
     if (this.concurrencyLimit === 0 && this.requestIntervalMs === 0) {
-      return operation();
+      return this.executeWithRateLimitRetry(operation);
     }
 
     return new Promise<T>((resolve, reject) => {
@@ -45,7 +72,7 @@ class ProviderModelRequestLimiter {
         if (this.requestIntervalMs > 0) {
           this.nextStartAt = Date.now() + this.requestIntervalMs;
         }
-        operation()
+        this.executeWithRateLimitRetry(operation)
           .then(resolve, reject)
           .finally(() => {
             this.activeCount = Math.max(0, this.activeCount - 1);

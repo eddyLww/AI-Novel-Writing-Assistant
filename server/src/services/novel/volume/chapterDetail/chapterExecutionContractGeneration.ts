@@ -3,7 +3,6 @@ import type {
   VolumePlan,
   VolumePlanDocument,
 } from "@ai-novel/shared/types/novel";
-import { assessChapterExecutionContractShape } from "@ai-novel/shared/types/chapterTaskSheetQuality";
 import {
   normalizeChapterScenePlan,
   serializeChapterScenePlan,
@@ -23,32 +22,6 @@ import type {
 } from "../volumeModels";
 
 type StoryMacroPlanResult = Awaited<ReturnType<StoryMacroPlanService["getPlan"]>> | null;
-
-export function canReuseChapterExecutionContract(input: {
-  novelId: string;
-  volumeId: string;
-  chapter: VolumePlan["chapters"][number];
-}): boolean {
-  return assessChapterExecutionContractShape({
-    novelId: input.novelId,
-    volumeId: input.volumeId,
-    chapterId: input.chapter.id,
-    chapterOrder: input.chapter.chapterOrder,
-    title: input.chapter.title,
-    summary: input.chapter.summary,
-    purpose: input.chapter.purpose,
-    exclusiveEvent: input.chapter.exclusiveEvent,
-    endingState: input.chapter.endingState,
-    nextChapterEntryState: input.chapter.nextChapterEntryState,
-    conflictLevel: input.chapter.conflictLevel,
-    revealLevel: input.chapter.revealLevel,
-    targetWordCount: input.chapter.targetWordCount,
-    mustAvoid: input.chapter.mustAvoid,
-    payoffRefs: input.chapter.payoffRefs,
-    taskSheet: input.chapter.taskSheet,
-    sceneCards: input.chapter.sceneCards,
-  }).canEnterExecution;
-}
 
 export async function generateChapterTaskSheetDetail(params: {
   promptInput: {
@@ -79,29 +52,31 @@ export async function generateChapterTaskSheetDetail(params: {
   const existingChapter = params.promptInput.targetChapter;
   if (
     !params.promptInput.guidance?.trim()
-    && canReuseChapterExecutionContract({
-      novelId: params.promptInput.workspace.novelId,
-      volumeId: params.promptInput.targetVolume.id,
-      chapter: existingChapter,
-    })
+    && existingChapter.taskSheet?.trim()
+    && existingChapter.sceneCards?.trim()
   ) {
-    const scenePlan = normalizeChapterScenePlan(
-      existingChapter.sceneCards,
-      existingChapter.targetWordCount,
-    );
-    return {
-      purpose: existingChapter.purpose?.trim() || existingChapter.summary.trim(),
-      exclusiveEvent: existingChapter.exclusiveEvent?.trim() || existingChapter.summary.trim(),
-      endingState: existingChapter.endingState?.trim() || "本章完成当前章节任务，并为下一章留下明确入口。",
-      nextChapterEntryState: existingChapter.nextChapterEntryState?.trim() || existingChapter.endingState?.trim() || "下一章承接本章结果继续推进。",
-      conflictLevel: existingChapter.conflictLevel ?? 3,
-      revealLevel: existingChapter.revealLevel ?? 2,
-      targetWordCount: existingChapter.targetWordCount ?? 2200,
-      mustAvoid: existingChapter.mustAvoid?.trim() || "避免偏离本章任务单和卷节奏。",
-      payoffRefs: existingChapter.payoffRefs,
-      taskSheet: existingChapter.taskSheet?.trim() ?? "",
-      sceneCards: serializeChapterScenePlan(scenePlan),
-    };
+    try {
+      const targetWordCount = existingChapter.targetWordCount ?? 2200;
+      const scenePlan = normalizeChapterScenePlan(
+        existingChapter.sceneCards,
+        targetWordCount,
+      );
+      return {
+        purpose: existingChapter.purpose?.trim() || existingChapter.summary.trim(),
+        exclusiveEvent: existingChapter.exclusiveEvent?.trim() || existingChapter.summary.trim(),
+        endingState: existingChapter.endingState?.trim() || "本章完成当前章节任务，并为下一章留下明确入口。",
+        nextChapterEntryState: existingChapter.nextChapterEntryState?.trim() || existingChapter.endingState?.trim() || "下一章承接本章结果继续推进。",
+        conflictLevel: existingChapter.conflictLevel ?? 3,
+        revealLevel: existingChapter.revealLevel ?? 2,
+        targetWordCount,
+        mustAvoid: existingChapter.mustAvoid?.trim() || "避免偏离本章任务单和卷节奏。",
+        payoffRefs: existingChapter.payoffRefs,
+        taskSheet: existingChapter.taskSheet.trim(),
+        sceneCards: serializeChapterScenePlan(scenePlan),
+      };
+    } catch {
+      // 隐秘的脏数据（例如场景卡少于3个）时，自动回退到下方 LLM 重新生成完整的规范执行合同
+    }
   }
 
   let lastError: Error | null = null;

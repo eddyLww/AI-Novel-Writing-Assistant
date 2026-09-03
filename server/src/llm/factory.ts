@@ -271,9 +271,12 @@ export async function resolveLLMClientOptions(
   }
 
   const temperature = resolveModelTemperature(resolvedProvider, model, resolvedTemperature);
-  const timeoutMs = normalizeOptionalTimeoutMs(options.timeoutMs);
-  const concurrencyLimit = normalizeLimitValue(dbSecret?.concurrencyLimit);
-  const requestIntervalMs = normalizeLimitValue(dbSecret?.requestIntervalMs);
+  const timeoutMs = normalizeOptionalTimeoutMs(options.timeoutMs) ?? 180000;
+  const isGeminiEndpoint = baseURL.includes("googleapis.com") || model.toLowerCase().includes("gemini");
+  const defaultConcurrency = (isBuiltInProvider(resolvedProvider) ? PROVIDERS[resolvedProvider].defaultConcurrencyLimit : undefined) ?? (isGeminiEndpoint ? 1 : undefined);
+  const defaultInterval = (isBuiltInProvider(resolvedProvider) ? PROVIDERS[resolvedProvider].defaultRequestIntervalMs : undefined) ?? (isGeminiEndpoint ? 3500 : undefined);
+  const concurrencyLimit = normalizeLimitValue(dbSecret?.concurrencyLimit) || (defaultConcurrency ?? 0);
+  const requestIntervalMs = normalizeLimitValue(dbSecret?.requestIntervalMs) || (defaultInterval ?? 0);
   const requestProtocol = options.requestProtocol === "anthropic" ? "anthropic" : "openai_compatible";
   const structuredStrategy = options.structuredStrategy;
   const executionMode = options.executionMode ?? "plain";

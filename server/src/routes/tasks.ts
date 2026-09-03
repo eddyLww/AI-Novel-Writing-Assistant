@@ -57,6 +57,7 @@ const autoDirectorFollowUpActionBodySchema = z.object({
     "continue_generic",
     "retry_with_task_model",
     "retry_with_route_model",
+    "dismiss_follow_up",
   ]),
   idempotencyKey: z.string().trim().min(1),
 });

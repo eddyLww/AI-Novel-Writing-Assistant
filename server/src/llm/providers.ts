@@ -15,6 +15,8 @@ export interface ProviderConfig {
   envModelKey?: string;
   maxTokens?: number;
   requiresApiKey?: boolean;
+  defaultConcurrencyLimit?: number;
+  defaultRequestIntervalMs?: number;
 }
 
 export const PROVIDERS: Record<BuiltinLLMProvider, ProviderConfig> = {
@@ -44,8 +46,8 @@ export const PROVIDERS: Record<BuiltinLLMProvider, ProviderConfig> = {
   openai: {
     name: "OpenAI",
     baseURL: "https://api.openai.com/v1",
-    defaultModel: "gpt-5",
-    models: ["gpt-5", "gpt-5-mini"],
+    defaultModel: "gpt-5.6-sol",
+    models: ["gpt-5.6-sol", "claude-sonnet-5", "claude-opus-5", "gpt-5", "gpt-5-mini"],
     envKey: "OPENAI_API_KEY",
     envBaseURLKey: "OPENAI_BASE_URL",
     envModelKey: "OPENAI_MODEL",
@@ -124,11 +126,13 @@ export const PROVIDERS: Record<BuiltinLLMProvider, ProviderConfig> = {
   gemini: {
     name: "Gemini",
     baseURL: "https://generativelanguage.googleapis.com/v1beta/openai",
-    defaultModel: "gemini-2.5-flash",
-    models: ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-3-flash-preview"],
+    defaultModel: "gemini-flash-latest",
+    models: ["gemini-flash-latest", "gemini-3.6-flash", "gemini-3-flash-preview", "gemini-2.5-pro"],
     envKey: "GEMINI_API_KEY",
     envBaseURLKey: "GEMINI_BASE_URL",
     envModelKey: "GEMINI_MODEL",
+    defaultConcurrencyLimit: 1,
+    defaultRequestIntervalMs: 2500,
   },
   ollama: {
     name: "Ollama",

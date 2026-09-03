@@ -43,6 +43,7 @@ const singleActionBodySchema = z.object({
     "retry_with_task_model",
     "retry_with_route_model",
     "safe_fix_validation",
+    "dismiss_follow_up",
   ]),
   idempotencyKey: z.string().trim().min(1),
 });
@@ -51,6 +52,7 @@ const batchActionBodySchema = z.object({
   actionCode: z.enum([
     "continue_auto_execution",
     "retry_with_task_model",
+    "dismiss_follow_up",
   ]),
   taskIds: z.array(z.string().trim().min(1)).min(1),
   batchRequestKey: z.string().trim().min(1),
