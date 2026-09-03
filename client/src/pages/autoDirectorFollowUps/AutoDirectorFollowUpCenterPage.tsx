@@ -66,12 +66,12 @@ function buildListParamsKey(input: {
 function isBatchActionAllowedForSection(
   section: AutoDirectorFollowUpSection,
   actionCode: AutoDirectorMutationActionCode,
-): actionCode is Extract<AutoDirectorMutationActionCode, "continue_auto_execution" | "retry_with_task_model"> {
+): actionCode is Extract<AutoDirectorMutationActionCode, "continue_auto_execution" | "retry_with_task_model" | "dismiss_follow_up"> {
   if (section === "pending") {
     return actionCode === "continue_auto_execution";
   }
   if (section === "exception") {
-    return actionCode === "retry_with_task_model";
+    return actionCode === "retry_with_task_model" || actionCode === "dismiss_follow_up";
   }
   return false;
 }
@@ -86,8 +86,8 @@ function buildBatchRequestKey(actionCode: AutoDirectorMutationActionCode): strin
 
 function isBatchActionCode(
   actionCode: AutoDirectorMutationActionCode,
-): actionCode is Extract<AutoDirectorMutationActionCode, "continue_auto_execution" | "retry_with_task_model"> {
-  return actionCode === "continue_auto_execution" || actionCode === "retry_with_task_model";
+): actionCode is Extract<AutoDirectorMutationActionCode, "continue_auto_execution" | "retry_with_task_model" | "dismiss_follow_up"> {
+  return actionCode === "continue_auto_execution" || actionCode === "retry_with_task_model" || actionCode === "dismiss_follow_up";
 }
 
 function getSelectedSection(items: AutoDirectorFollowUpItem[]): AutoDirectorFollowUpSection | null {
@@ -259,7 +259,7 @@ export default function AutoDirectorFollowUpCenterPage() {
 
   const batchMutation = useMutation({
     mutationFn: (input: {
-      actionCode: Extract<AutoDirectorMutationActionCode, "continue_auto_execution" | "retry_with_task_model">;
+      actionCode: Extract<AutoDirectorMutationActionCode, "continue_auto_execution" | "retry_with_task_model" | "dismiss_follow_up">;
       directorTaskIds: string[];
     }) => executeAutoDirectorFollowUpBatchAction({
       actionCode: input.actionCode,
@@ -363,12 +363,13 @@ export default function AutoDirectorFollowUpCenterPage() {
     });
   };
 
-  const handleExecuteBatch = async () => {
-    if (!batchActionCode || !isBatchActionCode(batchActionCode) || selectedItems.length === 0) {
+  const handleExecuteBatch = async (explicitActionCode?: AutoDirectorMutationActionCode) => {
+    const actionToUse = explicitActionCode ?? batchActionCode;
+    if (!actionToUse || !isBatchActionCode(actionToUse) || selectedItems.length === 0) {
       return;
     }
     await batchMutation.mutateAsync({
-      actionCode: batchActionCode,
+      actionCode: actionToUse,
       directorTaskIds: selectedItems.map((item) => item.directorTaskId),
     });
   };

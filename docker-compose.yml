@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  # 1. 后端 API 服务
+  api:
+    image: ai-novel-api:latest
+    container_name: ai-novel-api
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - HOST=0.0.0.0    # 核心：必须允许外网/宿主机 0.0.0.0 访问
+      - PORT=3000
+      - DATABASE_URL=file:/app/storage/dev.db
+    volumes:
+      - ./storage:/app/storage
+    command: sh -c "npx prisma db push --config prisma.config.ts --schema src/prisma/schema.prisma && node dist/app.js"
+    working_dir: /app/server
+
+  # 2. 前端 Nginx 网页服务
+  web:
+    image: ai-novel-web:latest
+    container_name: ai-novel-web
+    restart: always
+    ports:
+      - "8881:8080"
+    depends_on:
+      - api

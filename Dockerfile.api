@@ -20,10 +20,12 @@ RUN pnpm install --frozen-lockfile
 
 FROM deps AS build
 WORKDIR /app
+ENV NODE_OPTIONS="--max-old-space-size=4096"
 ENV AI_NOVEL_DATABASE_MODE=postgresql
 COPY shared/package.json shared/tsconfig.json ./shared/
 COPY shared/*.ts ./shared/
 COPY shared/types ./shared/types
+COPY shared/utils ./shared/utils
 COPY server/package.json server/tsconfig.json server/prisma.config.ts ./server/
 COPY server/src ./server/src
 RUN pnpm --filter @ai-novel/shared build \

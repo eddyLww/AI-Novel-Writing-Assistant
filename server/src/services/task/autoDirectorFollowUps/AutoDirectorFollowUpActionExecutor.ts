@@ -32,21 +32,23 @@ const EXECUTED_ACTION_CACHE = new Map<string, AutoDirectorActionExecutionResult>
 const BATCH_ALLOWED_ACTIONS = new Set<AutoDirectorMutationActionCode>([
   "continue_auto_execution",
   "retry_with_task_model",
+  "dismiss_follow_up",
 ]);
 
-const BATCH_SECTION_ACTIONS: Partial<Record<AutoDirectorFollowUpSection, AutoDirectorMutationActionCode>> = {
-  pending: "continue_auto_execution",
-  exception: "retry_with_task_model",
+const BATCH_SECTION_ACTIONS: Partial<Record<AutoDirectorFollowUpSection, AutoDirectorMutationActionCode[]>> = {
+  pending: ["continue_auto_execution"],
+  exception: ["retry_with_task_model", "dismiss_follow_up"],
 };
 
-function getAllowedBatchActionForRow(row: WorkflowTaskRow): AutoDirectorMutationActionCode | null {
+function getAllowedBatchActionsForRow(row: WorkflowTaskRow): Set<AutoDirectorMutationActionCode> {
   const section = resolveAutoDirectorFollowUpSection({
     status: row.status,
     checkpointType: toCheckpointType(row.checkpointType),
     pendingManualRecovery: row.pendingManualRecovery,
     validationResult: extractBlockedAutoDirectorValidationResult(row.seedPayloadJson),
   });
-  return BATCH_SECTION_ACTIONS[section] ?? null;
+  const allowed = BATCH_SECTION_ACTIONS[section] ?? [];
+  return new Set(allowed);
 }
 
 function isMissingTableError(error: unknown): boolean {
@@ -222,9 +224,26 @@ export class AutoDirectorFollowUpActionExecutor {
       return this.executeStructuredBackfill(row, input, executedCacheKey, healed);
     }
 
+    if (input.actionCode === "dismiss_follow_up") {
+      await prisma.novelWorkflowTask.delete({
+        where: { id: row.id },
+      });
+      const result: AutoDirectorActionExecutionResult = {
+        directorTaskId: input.taskId,
+        taskId: input.taskId,
+        actionCode: input.actionCode,
+        code: "executed",
+        message: "已彻底删除该任务数据",
+        task: null,
+      };
+      EXECUTED_ACTION_CACHE.set(executedCacheKey, result);
+      await this.recordActionLog(input, result);
+      return result;
+    }
+
     if (input.metadata?.batchAction === true) {
-      const allowedBatchAction = getAllowedBatchActionForRow(row);
-      if (allowedBatchAction !== input.actionCode) {
+      const allowedBatchActions = getAllowedBatchActionsForRow(row);
+      if (!allowedBatchActions.has(input.actionCode)) {
         const result: AutoDirectorActionExecutionResult = {
           directorTaskId: input.taskId,
           taskId: input.taskId,
@@ -324,6 +343,31 @@ export class AutoDirectorFollowUpActionExecutor {
     }
 
     const uniqueTaskIds = Array.from(new Set(input.taskIds.map((item) => item.trim()).filter(Boolean)));
+
+    if (input.actionCode === "dismiss_follow_up") {
+      await prisma.novelWorkflowTask.deleteMany({
+        where: {
+          id: {
+            in: uniqueTaskIds,
+          },
+        },
+      });
+      const itemResults: AutoDirectorActionExecutionResult[] = uniqueTaskIds.map((taskId) => ({
+        directorTaskId: taskId,
+        taskId,
+        actionCode: input.actionCode,
+        code: "executed",
+        message: "已彻底删除任务数据",
+        task: null,
+      }));
+      return {
+        code: "success",
+        successCount: uniqueTaskIds.length,
+        failureCount: 0,
+        skippedCount: 0,
+        itemResults,
+      };
+    }
     const itemResults: AutoDirectorActionExecutionResult[] = [];
     let highMemoryStartedCount = 0;
 

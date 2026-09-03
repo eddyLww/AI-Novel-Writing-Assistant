@@ -194,12 +194,18 @@ export function resolveAutoDirectorFollowUpReason(
           riskLevel: "medium",
           requiresConfirm: true,
         }),
+        mutationAction({
+          code: "dismiss_follow_up",
+          label: "清理跟进卡片",
+          riskLevel: "low",
+          requiresConfirm: true,
+        }),
         navigationAction({
           code: "open_detail",
           label: "查看详情",
         }),
       ],
-      batchActionCodes: ["retry_with_task_model"],
+      batchActionCodes: ["retry_with_task_model", "dismiss_follow_up"],
     });
   }
 

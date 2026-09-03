@@ -9,7 +9,7 @@ interface AutoDirectorFollowUpBatchBarProps {
   batchActionCode: AutoDirectorMutationActionCode | null;
   loading: boolean;
   onClear: () => void;
-  onExecute: () => void | Promise<void>;
+  onExecute: (actionCode?: AutoDirectorMutationActionCode) => void | Promise<void>;
 }
 
 function formatBatchActionLabel(actionCode: AutoDirectorMutationActionCode | null): string {
@@ -18,6 +18,9 @@ function formatBatchActionLabel(actionCode: AutoDirectorMutationActionCode | nul
   }
   if (actionCode === "retry_with_task_model") {
     return "批量重试异常任务";
+  }
+  if (actionCode === "dismiss_follow_up") {
+    return "批量清理跟进卡片";
   }
   return "当前所选项没有共同批量动作";
 }
@@ -42,21 +45,58 @@ export function AutoDirectorFollowUpBatchBar({
     ? "只向所选导演任务分别提交继续命令，不会跨任务合并状态。"
     : batchActionCode === "retry_with_task_model"
       ? "每个任务都会使用各自保存的模型重试，并保持对应的导演任务身份。"
-      : "不会执行批量操作；请重新选择同一分区且具有共同动作的任务。";
+      : "支持对选中的任务批量执行重试或彻底清理移出跟进中心。";
 
   return (
     <div className={AUTO_DIRECTOR_MOBILE_CLASSES.followUpBatchBar}>
       <TaskQueueActionRow
-        title={`已选择 ${selectedItems.length} 项 · ${selectedSection === "pending" || selectedSection === "exception" ? formatBatchActionLabel(batchActionCode) : "该分区不提供批量动作"}`}
+        title={`已选择 ${selectedItems.length} 项 · ${selectedSection === "pending" || selectedSection === "exception" ? formatBatchActionLabel(batchActionCode) : "提供批量动作"}`}
         consequence={consequence}
         tone={selectedSection === "exception" ? "danger" : "info"}
         action={(
           <div className="grid grid-cols-2 gap-2 md:flex">
-          <Button variant="outline" size="sm" className="w-full md:w-auto" onClick={onClear} disabled={loading}>
-            清空
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="w-full md:w-auto"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onClear();
+            }}
+            disabled={loading}
+          >
+            取消选择
           </Button>
-          <Button size="sm" className="w-full md:w-auto" onClick={() => void onExecute()} disabled={!batchActionCode || loading}>
-            执行批量动作
+          {selectedSection === "exception" || selectedSection === "needs_validation" ? (
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              className="w-full md:w-auto"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                void onExecute("dismiss_follow_up");
+              }}
+              disabled={loading}
+            >
+              批量清理跟进
+            </Button>
+          ) : null}
+          <Button
+            type="button"
+            size="sm"
+            className="w-full md:w-auto"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              void onExecute();
+            }}
+            disabled={!batchActionCode || loading}
+          >
+            执行批量重试
           </Button>
           </div>
         )}
